@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8' />
+    <title>Interactive 3D Hong Kong Map</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' />
+
+    <!-- Mapbox GL JS CSS -->
+    <link href='https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css' rel='stylesheet' />
+
+    <!-- Custom CSS -->
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden; /* Prevent body scrolling */
+        }
+
+        #app-container {
+            display: flex;
+            height: 100vh; /* Full viewport height */
+            width: 100vw; /* Full viewport width */
+        }
+
+        #sidebar {
+            width: 250px; /* Fixed width for the sidebar */
+            background-color: #f8f9fa;
+            padding: 15px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            overflow-y: auto; /* Allow scrolling if list is long */
+            z-index: 10; /* Ensure sidebar is clickable */
+        }
+
+        #sidebar h2 {
+            margin-top: 0;
+            font-size: 1.2em;
+            color: #333;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+        }
+
+        #sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        #sidebar li {
+            padding: 10px 5px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s ease;
+            font-size: 0.9em;
+        }
+
+        #sidebar li:hover {
+            background-color: #e9ecef;
+        }
+
+        #sidebar li:last-child {
+            border-bottom: none;
+        }
+
+        #map {
+            flex-grow: 1; /* Map takes remaining width */
+            height: 100%; /* Full height within container */
+            position: relative;
+        }
+
+         /* Simple loading overlay */
+        #loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000; /* Above map but below potential modals */
+            font-size: 1.5em;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app-container">
+        <div id="sidebar">
+            <h2>Top Destinations</h2>
+            <ul id="destination-list">
+                <!-- Destinations will be populated by JavaScript -->
+            </ul>
+        </div>
+        <div id="map">
+             <div id="loading-overlay">Loading Map...</div>
+        </div>
+    </div>
+
+    <!-- Mapbox GL JS -->
+    <script src='https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js'></script>
+
+    <!-- Three.js -->
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r126/three.min.js'></script>
+
+    <!-- Threebox -->
+    <script src='https://cdn.jsdelivr.net/npm/threebox-plugin@2.2.7/dist/threebox.min.js' type='text/javascript'></script>
+
+    <!-- Custom JavaScript -->
+    <script>
+        // --- Configuration ---
+        mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN'; // <--- REPLACE THIS!
+
+        const initialViewState = {
+            center: [114.17, 22.30], // Hong Kong general center
+            zoom: 12,
+            pitch: 65, // Initial tilt for 3D view
+            bearing: -20 // Initial rotation
+        };
+
+        // Top Tourist Destinations in Hong Kong
+        const destinations = [
+            { name: "Victoria Peak (The Peak Tram)", coordinates: [114.1498, 22.2759], zoom: 15.5, pitch: 60 },
+            { name: "Star Ferry (Central Pier)", coordinates: [114.1600, 22.2875], zoom: 16, pitch: 50 },
+            { name: "Tsim Sha Tsui Promenade", coordinates: [114.1720, 22.2930], zoom: 15.8, pitch: 60 },
+            { name: "Wong Tai Sin Temple", coordinates: [114.1925, 22.3426], zoom: 16.5, pitch: 45 },
+            { name: "Lan Kwai Fong", coordinates: [114.1550, 22.2810], zoom: 17, pitch: 55 },
+            { name: "Tian Tan Buddha (Big Buddha)", coordinates: [113.9050, 22.2540], zoom: 15, pitch: 40 },
+            { name: "Hong Kong Disneyland", coordinates: [114.0428, 22.3130], zoom: 14.5, pitch: 30 },
+            { name: "Ocean Park Hong Kong", coordinates: [114.1758, 22.2466], zoom: 14.8, pitch: 50 },
+            { name: "Temple Street Night Market", coordinates: [114.1703, 22.3050], zoom: 16.5, pitch: 50 },
+            { name: "Man Mo Temple", coordinates: [114.1500, 22.2840], zoom: 17, pitch: 50 },
+            { name: "Repulse Bay", coordinates: [114.1945, 22.2370], zoom: 15, pitch: 45 }
+        ];
+
+        // --- Initialize Map ---
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/standard', // Standard style includes 3D buildings
+            center: initialViewState.center,
+            zoom: initialViewState.zoom,
+            pitch: initialViewState.pitch,
+            bearing: initialViewState.bearing,
+            antialias: true // Improves rendering quality
+        });
+
+        // --- Populate Destinations List ---
+        const destinationList = document.getElementById('destination-list');
+        destinations.forEach(dest => {
+            const listItem = document.createElement('li');
+            listItem.textContent = dest.name;
+            listItem.setAttribute('data-lng', dest.coordinates[0]);
+            listItem.setAttribute('data-lat', dest.coordinates[1]);
+            listItem.setAttribute('data-zoom', dest.zoom || 15.5); // Default zoom if not specified
+            listItem.setAttribute('data-pitch', dest.pitch || 60); // Default pitch if not specified
+            listItem.setAttribute('data-bearing', dest.bearing || 0); // Default bearing
+
+            listItem.addEventListener('click', () => {
+                map.flyTo({
+                    center: [dest.coordinates[0], dest.coordinates[1]],
+                    zoom: parseFloat(listItem.getAttribute('data-zoom')),
+                    pitch: parseFloat(listItem.getAttribute('data-pitch')),
+                    bearing: parseFloat(listItem.getAttribute('data-bearing')),
+                    essential: true, // Ensures the animation completes
+                    duration: 3000 // Animation duration in milliseconds
+                });
+            });
+            destinationList.appendChild(listItem);
+        });
+
+        // --- Map Event Handlers ---
+        map.on('style.load', () => {
+            // Remove loading overlay
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay) {
+                loadingOverlay.style.display = 'none';
+            }
+
+            // Add 3D terrain if style supports it (standard style does)
+            map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
+
+             // Add fog for atmospheric effect (optional)
+             map.setFog({
+                'range': [0.8, 8],
+                'color': '#dc9f9f',
+                'horizon-blend': 0.05,
+                'high-color': '#245bde',
+                'space-color': '#000000',
+                'star-intensity': 0.15
+            });
+
+
+            // --- Initialize Threebox ---
+            // We initialize Threebox even if we only use Mapbox's 3D buildings for now,
+            // as it sets up the necessary THREE context for potential future additions.
+            window.tb = new Threebox.Threebox(
+                map,
+                map.getCanvas().getContext('webgl'),
+                {
+                    defaultLights: true,
+                    // enableSelectingFeatures: true, // Enable if you want object selection later
+                    // enableTooltips: true // Enable if you want tooltips later
+                }
+            );
+
+            // Note: The 'mapbox/standard' style automatically handles 3D buildings.
+            // If you were using a different style (like satellite), you might need
+            // to explicitly add the 3D building layer like this:
+            /*
+            map.addLayer({
+                id: '3d-buildings',
+                source: 'composite',
+                'source-layer': 'building',
+                filter: ['==', 'extrude', 'true'],
+                type: 'fill-extrusion',
+                minzoom: 14,
+                paint: {
+                    'fill-extrusion-color': '#aaa',
+                    'fill-extrusion-height': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        15, 0, // At zoom 15, height is 0
+                        15.5, ['get', 'height'] // At zoom 15.5, use actual height
+                    ],
+                    'fill-extrusion-base': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        15, 0,
+                        15.5, ['get', 'min_height']
+                    ],
+                    'fill-extrusion-opacity': 0.85
+                }
+            });
+            */
+
+            console.log("Map and Threebox initialized.");
+
+            // Example: Add a simple Three.js cube using Threebox (Optional)
+            // You can uncomment this to see how to add custom objects.
+            /*
+            const victoriaPeakCoords = destinations[0].coordinates;
+            const cubeOptions = {
+                obj: new THREE.Mesh(
+                    new THREE.BoxGeometry(20, 20, 50), // width, depth, height in meters
+                    new THREE.MeshPhongMaterial({ color: 0xff0000 })
+                ),
+                units: 'meters',
+                anchor: 'center'
+            };
+            const cube3D = tb.Object3D(cubeOptions).setCoords([victoriaPeakCoords[0], victoriaPeakCoords[1], 100]); // Lng, Lat, Altitude
+            tb.add(cube3D);
+            */
+
+        });
+
+        map.on('load', () => {
+             // You can add other 'load' specific actions here if needed,
+             // but 'style.load' is usually better for adding layers/sources.
+        });
+
+        map.on('error', (e) => {
+             console.error('Mapbox Error:', e);
+             const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay) {
+                loadingOverlay.textContent = 'Error loading map. Check console & Access Token.';
+                loadingOverlay.style.display = 'flex'; // Show error
+                loadingOverlay.style.color = 'red';
+            }
+        });
+
+    </script>
+
+</body>
+</html>

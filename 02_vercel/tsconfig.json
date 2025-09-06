@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "es2022", //make your js compatible with ECMAScript 2022 standard (modern features like await can be used)
+    "module": "es2022",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "verbatimModuleSyntax": true
+  }
+}

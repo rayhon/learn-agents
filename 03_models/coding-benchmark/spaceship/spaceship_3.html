@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detailed Spaceship V2</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #0a0a1a; /* Darker space blue */ }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: #cccccc;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            z-index: 100;
+        }
+    </style>
+    <!-- Import map for Three.js modules from CDN -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.163.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.163.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="info">Click and drag to rotate | Scroll/Pinch to zoom</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        let scene, camera, renderer, controls, spaceshipGroup;
+
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x0a0a1a, 0.008); // Add some distance fog
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(10, 20, 35); // Higher angle view
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x707090, 1.0); // Slightly brighter, cooler ambient
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xffffff, 2.5);
+            sunLight.position.set(30, 40, 20);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 1;
+            sunLight.shadow.camera.far = 100;
+            sunLight.shadow.camera.left = -30;
+            sunLight.shadow.camera.right = 30;
+            sunLight.shadow.camera.top = 30;
+            sunLight.shadow.camera.bottom = -30;
+            scene.add(sunLight);
+            // scene.add(new THREE.CameraHelper(sunLight.shadow.camera)); // Debug shadow
+
+            const hemiLight = new THREE.HemisphereLight( 0x4466ff, 0x332211, 0.8 ); // Sky color, ground color, intensity
+            scene.add( hemiLight );
+
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.08; // Slightly faster damping
+            controls.minDistance = 10;
+            controls.maxDistance = 150; // Allow zooming out further
+            // controls.target.set(0, 2, 0); // Target slightly above origin if needed
+
+            // Create Spaceship
+            createImprovedSpaceship();
+
+            // Add stars
+            addStars();
+
+            // Handle Window Resize
+            window.addEventListener('resize', onWindowResize, false);
+
+            // Start Animation
+            animate();
+        }
+
+        function createImprovedSpaceship() {
+            spaceshipGroup = new THREE.Group();
+
+            // --- Materials --- (Reusing similar ones, maybe adjust colors slightly)
+            const lightGreyPlate = new THREE.MeshStandardMaterial({ color: 0xd1d1d1, metalness: 0.75, roughness: 0.4 });
+            const midGreyStruct = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8, roughness: 0.35 });
+            const darkGreyEngine = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, metalness: 0.85, roughness: 0.3 });
+            const orangeAccent = new THREE.MeshStandardMaterial({ color: 0xff9500, metalness: 0.4, roughness: 0.6 });
+            const orangeGlow = new THREE.MeshStandardMaterial({ color: 0xffa500, emissive: 0xffa500, emissiveIntensity: 1.8 }); // Brighter glow
+            const cockpitGlass = new THREE.MeshPhysicalMaterial({ color: 0x90c0ff, metalness: 0.1, roughness: 0.1, transmission: 0.9, transparent: true, thickness: 0.3, ior: 1.4 });
+
+            // --- Component Functions ---
+             function createEngine(isLeft) {
+                const engineGroup = new THREE.Group();
+                const side = isLeft ? -1 : 1;
+                const engineRadius = 2.2;
+                const engineLength = 6;
+
+                // Main Engine Cylinder
+                const engineGeom = new THREE.CylinderGeometry(engineRadius, engineRadius * 0.9, engineLength, 24);
+                const engineMesh = new THREE.Mesh(engineGeom, darkGreyEngine);
+                engineMesh.rotation.z = Math.PI / 2;
+                engineMesh.castShadow = true;
+                engineMesh.receiveShadow = true;
+                engineGroup.add(engineMesh);
+
+                // Engine Nozzle Detail (Inner Cone)
+                const nozzleGeom = new THREE.ConeGeometry(engineRadius * 0.7, 1.5, 16);
+                const nozzleMesh = new THREE.Mesh(nozzleGeom, midGreyStruct);
+                nozzleMesh.position.x = engineLength / 2 - 0.1; // Position slightly inside the back
+                nozzleMesh.rotation.z = -Math.PI/2;
+                engineMesh.add(nozzleMesh); // Add relative to engine cylinder
+
+                 // Engine Glow (slightly recessed)
+                const glowGeom = new THREE.CylinderGeometry(engineRadius * 0.5, engineRadius*0.5, 0.3, 16);
+                const glowMesh = new THREE.Mesh(glowGeom, orangeGlow);
+                glowMesh.position.x = engineLength / 2 - 0.8; // Recessed inside nozzle
+                engineMesh.add(glowMesh);
+
+                // Vertical Stabilizer/Fin
+                const finShape = new THREE.Shape();
+                finShape.moveTo(0, 0);
+                finShape.lineTo(0, 3.5); // Height
+                finShape.lineTo(-2.5, 2.5); // Angled top back
+                finShape.lineTo(-2.5, 0); // Back base
+                finShape.lineTo(0, 0);
+                const extrudeSettings = { depth: 0.2, bevelEnabled: false };
+                const finGeom = new THREE.ExtrudeGeometry(finShape, extrudeSettings);
+                const finMesh = new THREE.Mesh(finGeom, lightGreyPlate);
+                finMesh.position.set(0, engineRadius * 0.8, -0.1); // On top of engine cylinder
+                finMesh.rotation.z = -Math.PI / 2; // Align with engine axis
+                 finMesh.castShadow = true;
+                engineGroup.add(finMesh);
+
+
+                engineGroup.position.set(side * (engineRadius + 1.5), 0, -1); // Position engines wider and slightly back
+                return engineGroup;
+            }
+
+             function createWing(isLeft) {
+                const wingGroup = new THREE.Group();
+                const side = isLeft ? -1 : 1;
+                const wingLength = 8; // Longer wings
+                const wingChord = 5;  // Depth
+                const wingThickness = 0.2;
+
+                 // Main wing shape - Approximation with a skewed box or custom geometry is hard
+                 // Using a Box for simplicity
+                const wingGeom = new THREE.BoxGeometry(wingChord, wingThickness, wingLength); // depth, height, width (relative to rotation)
+                const wingMesh = new THREE.Mesh(wingGeom, lightGreyPlate); // Use light grey base
+
+                // Orange panel on top
+                const orangePanelGeom = new THREE.BoxGeometry(wingChord * 0.9, wingThickness + 0.01, wingLength * 0.7); // Slightly smaller
+                const orangePanelMesh = new THREE.Mesh(orangePanelGeom, orangeAccent);
+                orangePanelMesh.position.y = 0.01; // Place slightly above the grey wing
+                wingMesh.add(orangePanelMesh);
+
+                wingMesh.rotation.x = Math.PI / 2; // Rotate to align with Z-axis
+                wingGroup.add(wingMesh);
+
+                // Position and sweep back
+                wingGroup.position.set(side * 4.5, -0.5, 0); // Attach further out, slightly lower
+                wingGroup.rotation.y = side * Math.PI / 5; // More sweep back angle
+
+                 wingMesh.castShadow = true;
+                 wingMesh.receiveShadow = true;
+
+                return wingGroup;
+            }
+
+            // --- Assemble Ship ---
+
+            // 1. Fuselage (Using multiple boxes for shape)
+            const frontFuselageGeom = new THREE.BoxGeometry(2.5, 1.8, 5); // Width, Height, Length
+            const frontFuselageMesh = new THREE.Mesh(frontFuselageGeom, lightGreyPlate);
+            frontFuselageMesh.position.z = 2.5; // Front part
+             frontFuselageMesh.castShadow = true;
+             frontFuselageMesh.receiveShadow = true;
+            spaceshipGroup.add(frontFuselageMesh);
+
+            const rearFuselageGeom = new THREE.BoxGeometry(3.5, 2.2, 6); // Slightly wider/taller rear
+            const rearFuselageMesh = new THREE.Mesh(rearFuselageGeom, lightGreyPlate);
+            rearFuselageMesh.position.z = -2.5; // Rear part
+             rearFuselageMesh.castShadow = true;
+            rearFuselageMesh.receiveShadow = true;
+            spaceshipGroup.add(rearFuselageMesh);
+
+            // 2. Cockpit (More angled box)
+            const cockpitGeom = new THREE.BoxGeometry(2.2, 1.4, 3.5);
+            const cockpitMesh = new THREE.Mesh(cockpitGeom, cockpitGlass);
+            cockpitMesh.position.set(0, 0.6, 3.8); // Position forward
+            cockpitMesh.geometry.translate(0, 0, -0.5); // Shift origin for better rotation pivot
+            cockpitMesh.rotation.x = -Math.PI / 12; // Angle down
+             cockpitMesh.castShadow = true;
+            spaceshipGroup.add(cockpitMesh);
+
+            // 3. Engines
+            spaceshipGroup.add(createEngine(true)); // Left
+            spaceshipGroup.add(createEngine(false)); // Right
+
+            // 4. Wings
+            spaceshipGroup.add(createWing(true)); // Left
+            spaceshipGroup.add(createWing(false)); // Right
+
+            // 5. Central Rear Section (Between engines)
+            const centerRearGeom = new THREE.BoxGeometry(2.8, 1.8, 5); // Width, Height, Length
+            const centerRearMesh = new THREE.Mesh(centerRearGeom, midGreyStruct);
+            centerRearMesh.position.z = -2.0; // Position between engines
+            centerRearMesh.castShadow = true;
+            centerRearMesh.receiveShadow = true;
+            spaceshipGroup.add(centerRearMesh);
+
+            // Orange Panels on Rear Section
+             const panelGeom = new THREE.BoxGeometry(2.6, 0.1, 0.8); // Thin panels
+            for (let i = 0; i < 4; i++) {
+                 const panelMesh = new THREE.Mesh(panelGeom, orangeAccent);
+                 panelMesh.position.set(0, 1.0, -3.5 + i * 1.1); // Position on top of rear section
+                 panelMesh.castShadow = true;
+                 centerRearMesh.add(panelMesh); // Add relative to center rear mesh
+            }
+
+
+            // Add the completed spaceship to the scene
+            spaceshipGroup.position.y = 2; // Adjust vertical position of the whole ship
+            scene.add(spaceshipGroup);
+        }
+
+        function addStars() {
+            const starGeometry = new THREE.BufferGeometry();
+            const starMaterial = new THREE.PointsMaterial({
+                color: 0xeeeeff, // Slightly blueish stars
+                size: 0.25,
+                sizeAttenuation: true
+            });
+
+            const starVertices = [];
+            for (let i = 0; i < 15000; i++) { // More stars
+                const radius = THREE.MathUtils.randFloat(50, 250); // Distribute further out
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos((Math.random() * 2) - 1);
+
+                const x = radius * Math.sin(phi) * Math.cos(theta);
+                const y = radius * Math.sin(phi) * Math.sin(theta);
+                const z = radius * Math.cos(phi);
+                starVertices.push(x, y, z);
+            }
+
+            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            scene.add(stars);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // --- Initialize ---
+        init();
+    </script>
+</body>
+</html>
